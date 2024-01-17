@@ -1,0 +1,37 @@
+{
+  "platform": {
+    "apiRuntime": "node:16"
+  },
+  "routes": [
+    {
+      "route": "/api/newsarticles/*",
+      "methods":["DELETE", "PUT", "POST"],
+      "allowedRoles": ["authenticated" ]
+    },
+    { 
+      "route": "/api/login", 
+      "redirect": "/.auth/login/auth0" 
+    }
+  ],
+  "auth": {
+    "identityProviders": {
+      "customOpenIdConnectProviders": {
+        "auth0": {
+          "registration": {
+            "clientIdSettingName": "AUTH0_ID",
+            "clientCredential": {
+              "clientSecretSettingName": "AUTH0_SECRET"
+            },
+            "openIdConnectConfiguration": {
+              "wellKnownOpenIdConfiguration": "https://dhigras.eu.auth0.com/.well-known/openid-configuration"
+            }
+          },
+          "login": {
+            "nameClaimType": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
+            "scopes": ["openid", "profile"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,101 @@
+name: Azure Static Web Apps CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-18.04
+    defaults:
+      run:
+        working-directory: api
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        cache: 'yarn'
+    - name: Install modules
+      run: yarn install --production=false
+    - name: Run tests
+      run: yarn testcoverage
+    - name: Codecov
+      uses: codecov/codecov-action@v2.1.0
+      with:
+        file: ./api/coverage/coverage-final.json
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true
+  build_and_deploy_job:
+    needs: run_tests
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    env:
+      TYPE_ORM_CONNECTION_STRING: ${{ secrets.TYPE_ORM_CONNECTION_STRING }}
+      NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+      SSL_CERT: ${{ secrets.SSL_CERT }}
+      NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+      NODE_ENV: ${{ secrets.NODE_ENV }}
+      AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Use Node 16
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
+          registry-url: 'https://npm.pkg.github.com/'
+          scope: '@dhi'
+          cache: 'yarn'
+          cache-dependency-path: |
+            api/yarn.lock
+            front-end/yarn.lock
+
+      - name: Add GH_TOKEN to .npmrc
+        run: |
+          cd front-end
+          echo "@dhi:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" >> .npmrc
+
+      - name: Update migrations
+        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed')
+        run: |
+          cd api
+          yarn install --production=false
+          yarn run m:update
+
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          app_build_command: "yarn install --production=false && yarn build"
+          api_build_command: "yarn install --production=false && yarn build"
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MANGO_RIVER_0835C3F03 }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
+          action: "upload"
+          ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
+          # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
+          app_location: "/front-end" # App source code path
+          api_location: "/api" # Api source code path - optional
+          output_location: "out" # Built app content directory - optional
+          ###### End of Repository/Build Configurations ######
+
+  close_pull_request_job:
+    needs: run_tests
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MANGO_RIVER_0835C3F03 }}
+          action: "close"

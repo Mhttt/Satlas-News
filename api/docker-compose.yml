@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  database:
+    container_name: SATLASDB
+    image: "postgis/postgis"
+    restart: always
+    env_file:
+      - ./.env
+    ports:
+      - 9999:5432
